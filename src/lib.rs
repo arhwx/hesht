@@ -82,6 +82,15 @@ impl Chip8 {
         program[..rom.len()].copy_from_slice(rom);
         Ok(())
     }
+
+    pub fn tick_timers(&mut self) {
+        self.delay_timer = self.delay_timer.saturating_sub(1);
+        self.sound_timer = self.sound_timer.saturating_sub(1);
+    }
+
+    pub fn sound_active(&self) -> bool {
+        self.sound_timer > 0
+    }
 }
 
 impl Default for Chip8 {

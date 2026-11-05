@@ -1,3 +1,3 @@
-![hesht](assets/banner.svg)
+<p align="center"><img src="assets/banner.svg" alt="hesht"></p>
 
-A CHIP-8 emulator written in Rust, named after the Kurdish word for eight.
+<p align="center">A CHIP-8 emulator written in Rust, named after the Kurdish word for eight.</p>

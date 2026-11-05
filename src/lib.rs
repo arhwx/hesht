@@ -21,6 +21,26 @@ const FONT: [u8; 80] = [
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum LoadError {
+    TooLarge { size: usize, max: usize },
+}
+
+impl std::fmt::Display for LoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TooLarge { size, max } => {
+                write!(
+                    f,
+                    "rom is {size} bytes, but at most {max} bytes fit in memory"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for LoadError {}
+
 pub struct Chip8 {
     memory: [u8; MEMORY_SIZE],
     v: [u8; 16],
@@ -47,6 +67,20 @@ impl Chip8 {
             delay_timer: 0,
             sound_timer: 0,
         }
+    }
+
+    pub fn load_rom(&mut self, rom: &[u8]) -> Result<(), LoadError> {
+        let program = &mut self.memory[PROGRAM_START as usize..];
+        if rom.len() > program.len() {
+            return Err(LoadError::TooLarge {
+                size: rom.len(),
+                max: program.len(),
+            });
+        }
+
+        program.fill(0);
+        program[..rom.len()].copy_from_slice(rom);
+        Ok(())
     }
 }
 

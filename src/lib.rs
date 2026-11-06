@@ -53,6 +53,7 @@ pub struct Chip8 {
     delay_timer: u8,
     sound_timer: u8,
     display: [bool; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+    keys: [bool; 16],
 }
 
 impl Chip8 {
@@ -70,6 +71,7 @@ impl Chip8 {
             delay_timer: 0,
             sound_timer: 0,
             display: [false; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+            keys: [false; 16],
         }
     }
 
@@ -98,6 +100,10 @@ impl Chip8 {
 
     pub fn display(&self) -> &[bool] {
         &self.display
+    }
+
+    pub fn set_key(&mut self, key: u8, pressed: bool) {
+        self.keys[key as usize] = pressed;
     }
 }
 

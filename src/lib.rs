@@ -1,6 +1,8 @@
 pub const MEMORY_SIZE: usize = 4096;
 pub const PROGRAM_START: u16 = 0x200;
 pub const FONT_START: usize = 0x050;
+pub const DISPLAY_WIDTH: usize = 64;
+pub const DISPLAY_HEIGHT: usize = 32;
 
 const FONT: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -50,6 +52,7 @@ pub struct Chip8 {
     sp: u8,
     delay_timer: u8,
     sound_timer: u8,
+    display: [bool; DISPLAY_WIDTH * DISPLAY_HEIGHT],
 }
 
 impl Chip8 {
@@ -66,6 +69,7 @@ impl Chip8 {
             sp: 0,
             delay_timer: 0,
             sound_timer: 0,
+            display: [false; DISPLAY_WIDTH * DISPLAY_HEIGHT],
         }
     }
 
@@ -90,6 +94,10 @@ impl Chip8 {
 
     pub fn sound_active(&self) -> bool {
         self.sound_timer > 0
+    }
+
+    pub fn display(&self) -> &[bool] {
+        &self.display
     }
 }
 

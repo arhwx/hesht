@@ -43,6 +43,23 @@ impl std::fmt::Display for LoadError {
 
 impl std::error::Error for LoadError {}
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum StepError {
+    UnknownOpcode { opcode: u16, addr: u16 },
+}
+
+impl std::fmt::Display for StepError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownOpcode { opcode, addr } => {
+                write!(f, "unknown opcode {opcode:04X} at {addr:03X}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for StepError {}
+
 pub struct Chip8 {
     memory: [u8; MEMORY_SIZE],
     v: [u8; 16],
@@ -104,6 +121,23 @@ impl Chip8 {
 
     pub fn set_key(&mut self, key: u8, pressed: bool) {
         self.keys[key as usize] = pressed;
+    }
+
+    pub fn step(&mut self) -> Result<(), StepError> {
+        let addr = self.pc;
+        let opcode = self.fetch();
+        self.execute(opcode, addr)
+    }
+
+    fn fetch(&mut self) -> u16 {
+        let pc = self.pc as usize;
+        let opcode = u16::from_be_bytes([self.memory[pc], self.memory[(pc + 1) % MEMORY_SIZE]]);
+        self.pc = (self.pc + 2) % MEMORY_SIZE as u16;
+        opcode
+    }
+
+    fn execute(&mut self, opcode: u16, addr: u16) -> Result<(), StepError> {
+        Err(StepError::UnknownOpcode { opcode, addr })
     }
 }
 

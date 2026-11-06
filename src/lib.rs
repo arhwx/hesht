@@ -46,6 +46,8 @@ impl std::error::Error for LoadError {}
 #[derive(Debug, PartialEq, Eq)]
 pub enum StepError {
     UnknownOpcode { opcode: u16, addr: u16 },
+    StackOverflow { addr: u16 },
+    StackUnderflow { addr: u16 },
 }
 
 impl std::fmt::Display for StepError {
@@ -54,6 +56,8 @@ impl std::fmt::Display for StepError {
             Self::UnknownOpcode { opcode, addr } => {
                 write!(f, "unknown opcode {opcode:04X} at {addr:03X}")
             }
+            Self::StackOverflow { addr } => write!(f, "stack overflow at {addr:03X}"),
+            Self::StackUnderflow { addr } => write!(f, "stack underflow at {addr:03X}"),
         }
     }
 }
@@ -137,7 +141,44 @@ impl Chip8 {
     }
 
     fn execute(&mut self, opcode: u16, addr: u16) -> Result<(), StepError> {
-        Err(StepError::UnknownOpcode { opcode, addr })
+        let x = ((opcode >> 8) & 0xF) as usize;
+        let y = ((opcode >> 4) & 0xF) as usize;
+        let n = (opcode & 0xF) as u8;
+        let nn = (opcode & 0xFF) as u8;
+        let nnn = opcode & 0xFFF;
+
+        match opcode >> 12 {
+            0x0 if opcode == 0x00E0 => self.display.fill(false),
+            0x0 if opcode == 0x00EE => {
+                if self.sp == 0 {
+                    return Err(StepError::StackUnderflow { addr });
+                }
+                self.sp -= 1;
+                self.pc = self.stack[self.sp as usize];
+            }
+            0x1 => self.pc = nnn,
+            0x2 => {
+                if self.sp as usize == self.stack.len() {
+                    return Err(StepError::StackOverflow { addr });
+                }
+                self.stack[self.sp as usize] = self.pc;
+                self.sp += 1;
+                self.pc = nnn;
+            }
+            0x3 => self.skip_if(self.v[x] == nn),
+            0x4 => self.skip_if(self.v[x] != nn),
+            0x5 if n == 0 => self.skip_if(self.v[x] == self.v[y]),
+            0x9 if n == 0 => self.skip_if(self.v[x] != self.v[y]),
+            0xB => self.pc = (nnn + self.v[0] as u16) % MEMORY_SIZE as u16,
+            _ => return Err(StepError::UnknownOpcode { opcode, addr }),
+        }
+        Ok(())
+    }
+
+    fn skip_if(&mut self, condition: bool) {
+        if condition {
+            self.pc = (self.pc + 2) % MEMORY_SIZE as u16;
+        }
     }
 }
 

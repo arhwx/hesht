@@ -168,7 +168,10 @@ impl Chip8 {
             0x3 => self.skip_if(self.v[x] == nn),
             0x4 => self.skip_if(self.v[x] != nn),
             0x5 if n == 0 => self.skip_if(self.v[x] == self.v[y]),
+            0x6 => self.v[x] = nn,
+            0x7 => self.v[x] = self.v[x].wrapping_add(nn),
             0x9 if n == 0 => self.skip_if(self.v[x] != self.v[y]),
+            0xA => self.i = nnn,
             0xB => self.pc = (nnn + self.v[0] as u16) % MEMORY_SIZE as u16,
             _ => return Err(StepError::UnknownOpcode { opcode, addr }),
         }

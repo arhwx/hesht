@@ -170,6 +170,38 @@ impl Chip8 {
             0x5 if n == 0 => self.skip_if(self.v[x] == self.v[y]),
             0x6 => self.v[x] = nn,
             0x7 => self.v[x] = self.v[x].wrapping_add(nn),
+            0x8 => match n {
+                0x0 => self.v[x] = self.v[y],
+                0x1 => self.v[x] |= self.v[y],
+                0x2 => self.v[x] &= self.v[y],
+                0x3 => self.v[x] ^= self.v[y],
+                0x4 => {
+                    let (sum, carry) = self.v[x].overflowing_add(self.v[y]);
+                    self.v[x] = sum;
+                    self.v[0xF] = carry as u8;
+                }
+                0x5 => {
+                    let (diff, borrow) = self.v[x].overflowing_sub(self.v[y]);
+                    self.v[x] = diff;
+                    self.v[0xF] = !borrow as u8;
+                }
+                0x6 => {
+                    let bit = self.v[x] & 1;
+                    self.v[x] >>= 1;
+                    self.v[0xF] = bit;
+                }
+                0x7 => {
+                    let (diff, borrow) = self.v[y].overflowing_sub(self.v[x]);
+                    self.v[x] = diff;
+                    self.v[0xF] = !borrow as u8;
+                }
+                0xE => {
+                    let bit = self.v[x] >> 7;
+                    self.v[x] <<= 1;
+                    self.v[0xF] = bit;
+                }
+                _ => return Err(StepError::UnknownOpcode { opcode, addr }),
+            },
             0x9 if n == 0 => self.skip_if(self.v[x] != self.v[y]),
             0xA => self.i = nnn,
             0xB => self.pc = (nnn + self.v[0] as u16) % MEMORY_SIZE as u16,

@@ -75,12 +75,16 @@ pub struct Chip8 {
     sound_timer: u8,
     display: [bool; DISPLAY_WIDTH * DISPLAY_HEIGHT],
     keys: [bool; 16],
+    rng: u32,
 }
 
 impl Chip8 {
     pub fn new() -> Self {
         let mut memory = [0; MEMORY_SIZE];
         memory[FONT_START..FONT_START + FONT.len()].copy_from_slice(&FONT);
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.subsec_nanos());
 
         Self {
             memory,
@@ -93,6 +97,7 @@ impl Chip8 {
             sound_timer: 0,
             display: [false; DISPLAY_WIDTH * DISPLAY_HEIGHT],
             keys: [false; 16],
+            rng: seed | 1,
         }
     }
 
@@ -205,6 +210,7 @@ impl Chip8 {
             0x9 if n == 0 => self.skip_if(self.v[x] != self.v[y]),
             0xA => self.i = nnn,
             0xB => self.pc = (nnn + self.v[0] as u16) % MEMORY_SIZE as u16,
+            0xC => self.v[x] = self.next_random() & nn,
             _ => return Err(StepError::UnknownOpcode { opcode, addr }),
         }
         Ok(())
@@ -214,6 +220,13 @@ impl Chip8 {
         if condition {
             self.pc = (self.pc + 2) % MEMORY_SIZE as u16;
         }
+    }
+
+    fn next_random(&mut self) -> u8 {
+        self.rng ^= self.rng << 13;
+        self.rng ^= self.rng >> 17;
+        self.rng ^= self.rng << 5;
+        (self.rng >> 24) as u8
     }
 }
 

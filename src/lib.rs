@@ -225,6 +225,27 @@ impl Chip8 {
                 },
                 0x15 => self.delay_timer = self.v[x],
                 0x18 => self.sound_timer = self.v[x],
+                0x1E => self.i = (self.i + self.v[x] as u16) % MEMORY_SIZE as u16,
+                0x29 => self.i = (FONT_START + (self.v[x] & 0xF) as usize * 5) as u16,
+                0x33 => {
+                    let i = self.i as usize;
+                    let value = self.v[x];
+                    self.memory[i % MEMORY_SIZE] = value / 100;
+                    self.memory[(i + 1) % MEMORY_SIZE] = value / 10 % 10;
+                    self.memory[(i + 2) % MEMORY_SIZE] = value % 10;
+                }
+                0x55 => {
+                    let i = self.i as usize;
+                    for (offset, &value) in self.v[..=x].iter().enumerate() {
+                        self.memory[(i + offset) % MEMORY_SIZE] = value;
+                    }
+                }
+                0x65 => {
+                    let i = self.i as usize;
+                    for (offset, value) in self.v[..=x].iter_mut().enumerate() {
+                        *value = self.memory[(i + offset) % MEMORY_SIZE];
+                    }
+                }
                 _ => return Err(StepError::UnknownOpcode { opcode, addr }),
             },
             _ => return Err(StepError::UnknownOpcode { opcode, addr }),

@@ -212,6 +212,18 @@ impl Chip8 {
             0xB => self.pc = (nnn + self.v[0] as u16) % MEMORY_SIZE as u16,
             0xC => self.v[x] = self.next_random() & nn,
             0xD => self.draw(self.v[x], self.v[y], n),
+            0xE => match nn {
+                0x9E => self.skip_if(self.keys[(self.v[x] & 0xF) as usize]),
+                0xA1 => self.skip_if(!self.keys[(self.v[x] & 0xF) as usize]),
+                _ => return Err(StepError::UnknownOpcode { opcode, addr }),
+            },
+            0xF => match nn {
+                0x0A => match self.keys.iter().position(|&pressed| pressed) {
+                    Some(key) => self.v[x] = key as u8,
+                    None => self.pc = addr,
+                },
+                _ => return Err(StepError::UnknownOpcode { opcode, addr }),
+            },
             _ => return Err(StepError::UnknownOpcode { opcode, addr }),
         }
         Ok(())

@@ -218,10 +218,13 @@ impl Chip8 {
                 _ => return Err(StepError::UnknownOpcode { opcode, addr }),
             },
             0xF => match nn {
+                0x07 => self.v[x] = self.delay_timer,
                 0x0A => match self.keys.iter().position(|&pressed| pressed) {
                     Some(key) => self.v[x] = key as u8,
                     None => self.pc = addr,
                 },
+                0x15 => self.delay_timer = self.v[x],
+                0x18 => self.sound_timer = self.v[x],
                 _ => return Err(StepError::UnknownOpcode { opcode, addr }),
             },
             _ => return Err(StepError::UnknownOpcode { opcode, addr }),

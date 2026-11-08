@@ -211,6 +211,7 @@ impl Chip8 {
             0xA => self.i = nnn,
             0xB => self.pc = (nnn + self.v[0] as u16) % MEMORY_SIZE as u16,
             0xC => self.v[x] = self.next_random() & nn,
+            0xD => self.draw(self.v[x], self.v[y], n),
             _ => return Err(StepError::UnknownOpcode { opcode, addr }),
         }
         Ok(())
@@ -227,6 +228,27 @@ impl Chip8 {
         self.rng ^= self.rng >> 17;
         self.rng ^= self.rng << 5;
         (self.rng >> 24) as u8
+    }
+
+    fn draw(&mut self, x: u8, y: u8, height: u8) {
+        let x = x as usize % DISPLAY_WIDTH;
+        let y = y as usize % DISPLAY_HEIGHT;
+        self.v[0xF] = 0;
+
+        for row in 0..(height as usize).min(DISPLAY_HEIGHT - y) {
+            let byte = self.memory[(self.i as usize + row) % MEMORY_SIZE];
+            for col in 0..(DISPLAY_WIDTH - x).min(8) {
+                if byte & (0x80 >> col) == 0 {
+                    continue;
+                }
+
+                let pixel = &mut self.display[(y + row) * DISPLAY_WIDTH + x + col];
+                if *pixel {
+                    self.v[0xF] = 1;
+                }
+                *pixel = !*pixel;
+            }
+        }
     }
 }
 

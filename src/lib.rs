@@ -293,3 +293,125 @@ impl Default for Chip8 {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chip8(program: &[u16]) -> Chip8 {
+        let rom: Vec<u8> = program.iter().flat_map(|op| op.to_be_bytes()).collect();
+        let mut chip8 = Chip8::new();
+        chip8.load_rom(&rom).unwrap();
+        chip8
+    }
+
+    fn run(chip8: &mut Chip8, steps: usize) {
+        for _ in 0..steps {
+            chip8.step().unwrap();
+        }
+    }
+
+    #[test]
+    fn rom_too_large() {
+        let mut chip8 = Chip8::new();
+        assert_eq!(chip8.load_rom(&[0; 3584]), Ok(()));
+        assert_eq!(
+            chip8.load_rom(&[0; 3585]),
+            Err(LoadError::TooLarge {
+                size: 3585,
+                max: 3584
+            })
+        );
+    }
+
+    #[test]
+    fn call_and_return() {
+        let mut chip8 = chip8(&[0x2204, 0x1202, 0x6007, 0x00EE]);
+        run(&mut chip8, 3);
+        assert_eq!(chip8.pc, 0x202);
+        assert_eq!(chip8.sp, 0);
+        assert_eq!(chip8.v[0], 7);
+    }
+
+    #[test]
+    fn stack_overflow() {
+        let mut chip8 = chip8(&[0x2200]);
+        run(&mut chip8, 16);
+        assert_eq!(chip8.step(), Err(StepError::StackOverflow { addr: 0x200 }));
+    }
+
+    #[test]
+    fn stack_underflow() {
+        let mut chip8 = chip8(&[0x00EE]);
+        assert_eq!(chip8.step(), Err(StepError::StackUnderflow { addr: 0x200 }));
+    }
+
+    #[test]
+    fn unknown_opcode() {
+        let mut chip8 = chip8(&[0x6000, 0xFFFF]);
+        run(&mut chip8, 1);
+        assert_eq!(
+            chip8.step(),
+            Err(StepError::UnknownOpcode {
+                opcode: 0xFFFF,
+                addr: 0x202
+            })
+        );
+    }
+
+    #[test]
+    fn add_carry() {
+        let mut chip8 = chip8(&[0x60FF, 0x6102, 0x8014]);
+        run(&mut chip8, 3);
+        assert_eq!(chip8.v[0], 1);
+        assert_eq!(chip8.v[0xF], 1);
+    }
+
+    #[test]
+    fn sub_borrow() {
+        let mut chip8 = chip8(&[0x6003, 0x6105, 0x8015, 0x6203, 0x8217]);
+        run(&mut chip8, 3);
+        assert_eq!(chip8.v[0], 0xFE);
+        assert_eq!(chip8.v[0xF], 0);
+        run(&mut chip8, 2);
+        assert_eq!(chip8.v[2], 2);
+        assert_eq!(chip8.v[0xF], 1);
+    }
+
+    #[test]
+    fn flag_overwrites_result() {
+        let mut chip8 = chip8(&[0x6F80, 0x6180, 0x8F14, 0x6F05, 0x6103, 0x8F15]);
+        run(&mut chip8, 3);
+        assert_eq!(chip8.v[0xF], 1);
+        run(&mut chip8, 3);
+        assert_eq!(chip8.v[0xF], 1);
+    }
+
+    #[test]
+    fn bcd() {
+        let mut chip8 = chip8(&[0x60FE, 0xA300, 0xF033]);
+        run(&mut chip8, 3);
+        assert_eq!(chip8.memory[0x300..0x303], [2, 5, 4]);
+    }
+
+    #[test]
+    fn draw_collision() {
+        let mut chip8 = chip8(&[0xA050, 0x6000, 0xD005, 0xD005]);
+        run(&mut chip8, 3);
+        assert_eq!(chip8.display[..5], [true, true, true, true, false]);
+        assert_eq!(chip8.v[0xF], 0);
+        run(&mut chip8, 1);
+        assert!(chip8.display.iter().all(|&on| !on));
+        assert_eq!(chip8.v[0xF], 1);
+    }
+
+    #[test]
+    fn draw_clipping() {
+        let mut chip8 = chip8(&[0xA050, 0x603E, 0x611E, 0xD015]);
+        run(&mut chip8, 4);
+        let on: Vec<usize> = (0..chip8.display.len())
+            .filter(|&i| chip8.display[i])
+            .collect();
+        assert_eq!(on, [30 * 64 + 62, 30 * 64 + 63, 31 * 64 + 62]);
+    }
+}

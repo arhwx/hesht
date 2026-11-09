@@ -1,0 +1,46 @@
+use hesht::{Chip8, DISPLAY_HEIGHT, DISPLAY_WIDTH};
+use minifb::{Key, Scale, Window, WindowOptions};
+
+const STEPS_PER_FRAME: usize = 10;
+const ON: u32 = 0xFFFFFF;
+const OFF: u32 = 0x000000;
+
+fn main() {
+    let Some(path) = std::env::args().nth(1) else {
+        eprintln!("usage: hesht <rom>");
+        std::process::exit(1);
+    };
+
+    if let Err(err) = run(&path) {
+        eprintln!("hesht: {err}");
+        std::process::exit(1);
+    }
+}
+
+fn run(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let rom = std::fs::read(path).map_err(|err| format!("{path}: {err}"))?;
+    let mut chip8 = Chip8::new();
+    chip8.load_rom(&rom)?;
+
+    let options = WindowOptions {
+        scale: Scale::X16,
+        ..WindowOptions::default()
+    };
+    let mut window = Window::new("hesht", DISPLAY_WIDTH, DISPLAY_HEIGHT, options)?;
+    window.set_target_fps(60);
+
+    let mut buffer = [OFF; DISPLAY_WIDTH * DISPLAY_HEIGHT];
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        for _ in 0..STEPS_PER_FRAME {
+            chip8.step()?;
+        }
+        chip8.tick_timers();
+
+        for (pixel, &on) in buffer.iter_mut().zip(chip8.display()) {
+            *pixel = if on { ON } else { OFF };
+        }
+        window.update_with_buffer(&buffer, DISPLAY_WIDTH, DISPLAY_HEIGHT)?;
+    }
+
+    Ok(())
+}

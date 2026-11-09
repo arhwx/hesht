@@ -1,9 +1,13 @@
 use hesht::{Chip8, DISPLAY_HEIGHT, DISPLAY_WIDTH};
 use minifb::{Key, Scale, Window, WindowOptions};
+use rodio::Source;
+use rodio::source::SquareWave;
 
 const STEPS_PER_FRAME: usize = 10;
 const ON: u32 = 0xFFFFFF;
 const OFF: u32 = 0x000000;
+const BEEP_HZ: f32 = 440.0;
+const BEEP_VOLUME: f32 = 0.1;
 
 const KEYS: [Key; 16] = [
     Key::X,
@@ -48,6 +52,12 @@ fn run(path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut window = Window::new("hesht", DISPLAY_WIDTH, DISPLAY_HEIGHT, options)?;
     window.set_target_fps(60);
 
+    let mut audio = rodio::DeviceSinkBuilder::open_default_sink()?;
+    audio.log_on_drop(false);
+    let beep = rodio::Player::connect_new(audio.mixer());
+    beep.append(SquareWave::new(BEEP_HZ).amplify(BEEP_VOLUME));
+    beep.pause();
+
     let mut buffer = [OFF; DISPLAY_WIDTH * DISPLAY_HEIGHT];
     while window.is_open() && !window.is_key_down(Key::Escape) {
         for (key, &code) in KEYS.iter().enumerate() {
@@ -58,6 +68,11 @@ fn run(path: &str) -> Result<(), Box<dyn std::error::Error>> {
             chip8.step()?;
         }
         chip8.tick_timers();
+        if chip8.sound_active() {
+            beep.play();
+        } else {
+            beep.pause();
+        }
 
         for (pixel, &on) in buffer.iter_mut().zip(chip8.display()) {
             *pixel = if on { ON } else { OFF };

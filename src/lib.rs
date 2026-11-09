@@ -75,6 +75,7 @@ pub struct Chip8 {
     sound_timer: u8,
     display: [bool; DISPLAY_WIDTH * DISPLAY_HEIGHT],
     keys: [bool; 16],
+    pressed_key: Option<u8>,
     rng: u32,
 }
 
@@ -97,6 +98,7 @@ impl Chip8 {
             sound_timer: 0,
             display: [false; DISPLAY_WIDTH * DISPLAY_HEIGHT],
             keys: [false; 16],
+            pressed_key: None,
             rng: seed | 1,
         }
     }
@@ -219,9 +221,20 @@ impl Chip8 {
             },
             0xF => match nn {
                 0x07 => self.v[x] = self.delay_timer,
-                0x0A => match self.keys.iter().position(|&pressed| pressed) {
-                    Some(key) => self.v[x] = key as u8,
-                    None => self.pc = addr,
+                0x0A => match self.pressed_key {
+                    Some(key) if !self.keys[key as usize] => {
+                        self.v[x] = key;
+                        self.pressed_key = None;
+                    }
+                    Some(_) => self.pc = addr,
+                    None => {
+                        self.pressed_key = self
+                            .keys
+                            .iter()
+                            .position(|&pressed| pressed)
+                            .map(|key| key as u8);
+                        self.pc = addr;
+                    }
                 },
                 0x15 => self.delay_timer = self.v[x],
                 0x18 => self.sound_timer = self.v[x],
@@ -392,6 +405,20 @@ mod tests {
         let mut chip8 = chip8(&[0x60FE, 0xA300, 0xF033]);
         run(&mut chip8, 3);
         assert_eq!(chip8.memory[0x300..0x303], [2, 5, 4]);
+    }
+
+    #[test]
+    fn wait_for_key_release() {
+        let mut chip8 = chip8(&[0xF00A]);
+        run(&mut chip8, 1);
+        assert_eq!(chip8.pc, 0x200);
+        chip8.set_key(5, true);
+        run(&mut chip8, 1);
+        assert_eq!(chip8.pc, 0x200);
+        chip8.set_key(5, false);
+        run(&mut chip8, 1);
+        assert_eq!(chip8.pc, 0x202);
+        assert_eq!(chip8.v[0], 5);
     }
 
     #[test]

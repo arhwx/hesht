@@ -5,6 +5,25 @@ const STEPS_PER_FRAME: usize = 10;
 const ON: u32 = 0xFFFFFF;
 const OFF: u32 = 0x000000;
 
+const KEYS: [Key; 16] = [
+    Key::X,
+    Key::Key1,
+    Key::Key2,
+    Key::Key3,
+    Key::Q,
+    Key::W,
+    Key::E,
+    Key::A,
+    Key::S,
+    Key::D,
+    Key::Z,
+    Key::C,
+    Key::Key4,
+    Key::R,
+    Key::F,
+    Key::V,
+];
+
 fn main() {
     let Some(path) = std::env::args().nth(1) else {
         eprintln!("usage: hesht <rom>");
@@ -31,6 +50,10 @@ fn run(path: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut buffer = [OFF; DISPLAY_WIDTH * DISPLAY_HEIGHT];
     while window.is_open() && !window.is_key_down(Key::Escape) {
+        for (key, &code) in KEYS.iter().enumerate() {
+            chip8.set_key(key as u8, window.is_key_down(code));
+        }
+
         for _ in 0..STEPS_PER_FRAME {
             chip8.step()?;
         }

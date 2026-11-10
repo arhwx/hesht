@@ -49,7 +49,12 @@ fn run(path: &str) -> Result<(), Box<dyn std::error::Error>> {
         scale: Scale::X16,
         ..WindowOptions::default()
     };
-    let mut window = Window::new("hesht", DISPLAY_WIDTH, DISPLAY_HEIGHT, options)?;
+    let name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(path);
+    let title = format!("hesht - {name}");
+    let mut window = Window::new(&title, DISPLAY_WIDTH, DISPLAY_HEIGHT, options)?;
     window.set_target_fps(60);
 
     let mut audio = rodio::DeviceSinkBuilder::open_default_sink()?;

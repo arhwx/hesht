@@ -1,5 +1,5 @@
-use hesht::{Chip8, DISPLAY_HEIGHT, DISPLAY_WIDTH, Quirks};
-use minifb::{Key, Scale, Window, WindowOptions};
+use hesht::{Chip8, DISPLAY_HEIGHT, DISPLAY_WIDTH, LoadError, Quirks};
+use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 use rodio::Source;
 use rodio::source::SquareWave;
 
@@ -122,8 +122,7 @@ fn parse_quirks(value: &str) -> Result<Quirks, String> {
 fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
     let path = &options.rom;
     let rom = std::fs::read(path).map_err(|err| format!("{path}: {err}"))?;
-    let mut chip8 = Chip8::with_quirks(options.quirks);
-    chip8.load_rom(&rom)?;
+    let mut chip8 = boot(&rom, options.quirks)?;
 
     let window_options = WindowOptions {
         scale: options.scale,
@@ -143,17 +142,32 @@ fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
     beep.append(SquareWave::new(BEEP_HZ).amplify(BEEP_VOLUME));
     beep.pause();
 
+    let mut paused = false;
     let mut buffer = [OFF; DISPLAY_WIDTH * DISPLAY_HEIGHT];
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        for (key, &code) in KEYS.iter().enumerate() {
-            chip8.set_key(key as u8, window.is_key_down(code));
+        if window.is_key_pressed(Key::Space, KeyRepeat::No) {
+            paused = !paused;
+            if paused {
+                window.set_title(&format!("{title} (paused)"));
+            } else {
+                window.set_title(&title);
+            }
+        }
+        if window.is_key_pressed(Key::Backspace, KeyRepeat::No) {
+            chip8 = boot(&rom, options.quirks)?;
         }
 
-        for _ in 0..options.speed {
-            chip8.step()?;
+        if !paused {
+            for (key, &code) in KEYS.iter().enumerate() {
+                chip8.set_key(key as u8, window.is_key_down(code));
+            }
+
+            for _ in 0..options.speed {
+                chip8.step()?;
+            }
+            chip8.tick();
         }
-        chip8.tick();
-        if chip8.sound_active() {
+        if !paused && chip8.sound_active() {
             beep.play();
         } else {
             beep.pause();
@@ -166,4 +180,10 @@ fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn boot(rom: &[u8], quirks: Quirks) -> Result<Chip8, LoadError> {
+    let mut chip8 = Chip8::with_quirks(quirks);
+    chip8.load_rom(rom)?;
+    Ok(chip8)
 }

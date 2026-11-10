@@ -72,7 +72,7 @@ fn run(path: &str) -> Result<(), Box<dyn std::error::Error>> {
         for _ in 0..STEPS_PER_FRAME {
             chip8.step()?;
         }
-        chip8.tick_timers();
+        chip8.tick();
         if chip8.sound_active() {
             beep.play();
         } else {

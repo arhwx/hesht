@@ -75,6 +75,8 @@ pub struct Quirks {
     pub memory_increments_i: bool,
     /// Bxnn jumps to xnn plus vX instead of nnn plus V0
     pub jump_uses_vx: bool,
+    /// Dxyn stops execution until the next 60 Hz tick
+    pub display_wait: bool,
 }
 
 impl Quirks {
@@ -83,6 +85,7 @@ impl Quirks {
         shift_uses_vy: true,
         memory_increments_i: true,
         jump_uses_vx: false,
+        display_wait: true,
     };
 
     pub const SCHIP: Self = Self {
@@ -90,6 +93,7 @@ impl Quirks {
         shift_uses_vy: false,
         memory_increments_i: false,
         jump_uses_vx: true,
+        display_wait: false,
     };
 }
 
@@ -113,6 +117,7 @@ pub struct Chip8 {
     pressed_key: Option<u8>,
     rng: u32,
     quirks: Quirks,
+    waiting_for_tick: bool,
 }
 
 impl Chip8 {
@@ -141,6 +146,7 @@ impl Chip8 {
             pressed_key: None,
             rng: seed | 1,
             quirks,
+            waiting_for_tick: false,
         }
     }
 
@@ -158,9 +164,10 @@ impl Chip8 {
         Ok(())
     }
 
-    pub fn tick_timers(&mut self) {
+    pub fn tick(&mut self) {
         self.delay_timer = self.delay_timer.saturating_sub(1);
         self.sound_timer = self.sound_timer.saturating_sub(1);
+        self.waiting_for_tick = false;
     }
 
     pub fn sound_active(&self) -> bool {
@@ -176,6 +183,10 @@ impl Chip8 {
     }
 
     pub fn step(&mut self) -> Result<(), StepError> {
+        if self.waiting_for_tick {
+            return Ok(());
+        }
+
         let addr = self.pc;
         let opcode = self.fetch();
         self.execute(opcode, addr)
@@ -261,7 +272,10 @@ impl Chip8 {
                 self.pc = (nnn + offset as u16) % MEMORY_SIZE as u16;
             }
             0xC => self.v[x] = self.next_random() & nn,
-            0xD => self.draw(self.v[x], self.v[y], n),
+            0xD => {
+                self.draw(self.v[x], self.v[y], n);
+                self.waiting_for_tick = self.quirks.display_wait;
+            }
             0xE => match nn {
                 0x9E => self.skip_if(self.keys[(self.v[x] & 0xF) as usize]),
                 0xA1 => self.skip_if(!self.keys[(self.v[x] & 0xF) as usize]),
@@ -508,6 +522,7 @@ mod tests {
         run(&mut chip8, 3);
         assert_eq!(chip8.display[..5], [true, true, true, true, false]);
         assert_eq!(chip8.v[0xF], 0);
+        chip8.tick();
         run(&mut chip8, 1);
         assert!(chip8.display.iter().all(|&on| !on));
         assert_eq!(chip8.v[0xF], 1);
@@ -549,5 +564,15 @@ mod tests {
         let (cosmac, schip) = cosmac_and_schip(&[0x6002, 0x6104, 0xB140], 3);
         assert_eq!(cosmac.pc, 0x142);
         assert_eq!(schip.pc, 0x144);
+    }
+
+    #[test]
+    fn display_wait() {
+        let (mut cosmac, schip) = cosmac_and_schip(&[0xD001, 0x6005], 2);
+        assert_eq!(cosmac.v[0], 0);
+        assert_eq!(schip.v[0], 5);
+        cosmac.tick();
+        run(&mut cosmac, 1);
+        assert_eq!(cosmac.v[0], 5);
     }
 }

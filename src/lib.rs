@@ -99,6 +99,18 @@ impl Quirks {
         display_wait: false,
         clipping: true,
     };
+
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut bool> {
+        match name {
+            "vf-reset" => Some(&mut self.vf_reset),
+            "shift-uses-vy" => Some(&mut self.shift_uses_vy),
+            "memory-increments-i" => Some(&mut self.memory_increments_i),
+            "jump-uses-vx" => Some(&mut self.jump_uses_vx),
+            "display-wait" => Some(&mut self.display_wait),
+            "clipping" => Some(&mut self.clipping),
+            _ => None,
+        }
+    }
 }
 
 impl Default for Quirks {

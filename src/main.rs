@@ -14,7 +14,13 @@ const USAGE: &str = "usage: hesht [options] <rom>
 options:
   --speed N        instructions per frame (default 10)
   --scale N        window scale: 1, 2, 4, 8, 16 or 32 (default 16)
-  --quirks NAME    cosmac or schip (default cosmac)";
+  --quirks NAME    cosmac or schip (default cosmac)
+  --quirk NAME=on|off
+                   override one quirk of the preset, can be repeated
+
+quirks:
+  vf-reset, shift-uses-vy, memory-increments-i, jump-uses-vx,
+  display-wait, clipping";
 
 const KEYS: [Key; 16] = [
     Key::X,
@@ -62,6 +68,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options, String>
     let mut speed = DEFAULT_SPEED;
     let mut scale = Scale::X16;
     let mut quirks = Quirks::default();
+    let mut overrides = Vec::new();
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -72,10 +79,18 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options, String>
             "--speed" => speed = parse_speed(&value(&mut args, &arg)?)?,
             "--scale" => scale = parse_scale(&value(&mut args, &arg)?)?,
             "--quirks" => quirks = parse_quirks(&value(&mut args, &arg)?)?,
+            "--quirk" => overrides.push(parse_quirk(&value(&mut args, &arg)?)?),
             _ if arg.starts_with('-') => return Err(format!("unknown option {arg}")),
             _ if rom.is_none() => rom = Some(arg),
             _ => return Err(format!("unexpected argument {arg}")),
         }
+    }
+
+    for (name, enabled) in overrides {
+        let quirk = quirks
+            .get_mut(&name)
+            .ok_or_else(|| format!("unknown quirk {name}"))?;
+        *quirk = enabled;
     }
 
     Ok(Options {
@@ -117,6 +132,17 @@ fn parse_quirks(value: &str) -> Result<Quirks, String> {
         "schip" => Ok(Quirks::SCHIP),
         _ => Err(format!("invalid quirks {value}, expected cosmac or schip")),
     }
+}
+
+fn parse_quirk(value: &str) -> Result<(String, bool), String> {
+    let invalid = || format!("invalid quirk {value}, expected NAME=on or NAME=off");
+    let (name, state) = value.split_once('=').ok_or_else(invalid)?;
+    let enabled = match state {
+        "on" => true,
+        "off" => false,
+        _ => return Err(invalid()),
+    };
+    Ok((name.to_string(), enabled))
 }
 
 fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {

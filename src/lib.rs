@@ -77,6 +77,8 @@ pub struct Quirks {
     pub jump_uses_vx: bool,
     /// Dxyn stops execution until the next 60 Hz tick
     pub display_wait: bool,
+    /// Dxyn clips sprites at the screen edge instead of wrapping them around
+    pub clipping: bool,
 }
 
 impl Quirks {
@@ -86,6 +88,7 @@ impl Quirks {
         memory_increments_i: true,
         jump_uses_vx: false,
         display_wait: true,
+        clipping: true,
     };
 
     pub const SCHIP: Self = Self {
@@ -94,6 +97,7 @@ impl Quirks {
         memory_increments_i: false,
         jump_uses_vx: true,
         display_wait: false,
+        clipping: true,
     };
 }
 
@@ -365,16 +369,26 @@ impl Chip8 {
     fn draw(&mut self, x: u8, y: u8, height: u8) {
         let x = x as usize % DISPLAY_WIDTH;
         let y = y as usize % DISPLAY_HEIGHT;
+        let (rows, cols) = if self.quirks.clipping {
+            (
+                (height as usize).min(DISPLAY_HEIGHT - y),
+                (DISPLAY_WIDTH - x).min(8),
+            )
+        } else {
+            (height as usize, 8)
+        };
         self.v[0xF] = 0;
 
-        for row in 0..(height as usize).min(DISPLAY_HEIGHT - y) {
+        for row in 0..rows {
             let byte = self.memory[(self.i as usize + row) % MEMORY_SIZE];
-            for col in 0..(DISPLAY_WIDTH - x).min(8) {
+            let py = (y + row) % DISPLAY_HEIGHT;
+            for col in 0..cols {
                 if byte & (0x80 >> col) == 0 {
                     continue;
                 }
 
-                let pixel = &mut self.display[(y + row) * DISPLAY_WIDTH + x + col];
+                let px = (x + col) % DISPLAY_WIDTH;
+                let pixel = &mut self.display[py * DISPLAY_WIDTH + px];
                 if *pixel {
                     self.v[0xF] = 1;
                 }

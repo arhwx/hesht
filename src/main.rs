@@ -201,7 +201,8 @@ fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
             chip8 = boot(&rom, options.quirks)?;
         }
 
-        if !paused {
+        let step_frame = paused && window.is_key_pressed(Key::N, KeyRepeat::Yes);
+        if !paused || step_frame {
             for (key, &code) in KEYS.iter().enumerate() {
                 chip8.set_key(key as u8, window.is_key_down(code));
             }

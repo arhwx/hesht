@@ -4,8 +4,8 @@ use rodio::Source;
 use rodio::source::SquareWave;
 
 const DEFAULT_SPEED: usize = 10;
-const ON: u32 = 0xFFFFFF;
-const OFF: u32 = 0x000000;
+const DEFAULT_FG: u32 = 0xFFFFFF;
+const DEFAULT_BG: u32 = 0x000000;
 const BEEP_HZ: f32 = 440.0;
 const BEEP_VOLUME: f32 = 0.1;
 
@@ -17,6 +17,8 @@ options:
   --quirks NAME    cosmac or schip (default cosmac)
   --quirk NAME=on|off
                    override one quirk of the preset, can be repeated
+  --fg RRGGBB      colour of lit pixels (default FFFFFF)
+  --bg RRGGBB      colour of unlit pixels (default 000000)
 
 quirks:
   vf-reset, shift-uses-vy, memory-increments-i, jump-uses-vx,
@@ -46,6 +48,8 @@ struct Options {
     speed: usize,
     scale: Scale,
     quirks: Quirks,
+    fg: u32,
+    bg: u32,
 }
 
 fn main() {
@@ -69,6 +73,8 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options, String>
     let mut scale = Scale::X16;
     let mut quirks = Quirks::default();
     let mut overrides = Vec::new();
+    let mut fg = DEFAULT_FG;
+    let mut bg = DEFAULT_BG;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -80,6 +86,8 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options, String>
             "--scale" => scale = parse_scale(&value(&mut args, &arg)?)?,
             "--quirks" => quirks = parse_quirks(&value(&mut args, &arg)?)?,
             "--quirk" => overrides.push(parse_quirk(&value(&mut args, &arg)?)?),
+            "--fg" => fg = parse_colour(&value(&mut args, &arg)?)?,
+            "--bg" => bg = parse_colour(&value(&mut args, &arg)?)?,
             _ if arg.starts_with('-') => return Err(format!("unknown option {arg}")),
             _ if rom.is_none() => rom = Some(arg),
             _ => return Err(format!("unexpected argument {arg}")),
@@ -98,6 +106,8 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options, String>
         speed,
         scale,
         quirks,
+        fg,
+        bg,
     })
 }
 
@@ -145,6 +155,14 @@ fn parse_quirk(value: &str) -> Result<(String, bool), String> {
     Ok((name.to_string(), enabled))
 }
 
+fn parse_colour(value: &str) -> Result<u32, String> {
+    let hex = value.strip_prefix('#').unwrap_or(value);
+    if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(format!("invalid colour {value}, expected RRGGBB"));
+    }
+    Ok(u32::from_str_radix(hex, 16).expect("six hex digits fit in u32"))
+}
+
 fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
     let path = &options.rom;
     let rom = std::fs::read(path).map_err(|err| format!("{path}: {err}"))?;
@@ -169,7 +187,7 @@ fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
     beep.pause();
 
     let mut paused = false;
-    let mut buffer = [OFF; DISPLAY_WIDTH * DISPLAY_HEIGHT];
+    let mut buffer = [options.bg; DISPLAY_WIDTH * DISPLAY_HEIGHT];
     while window.is_open() && !window.is_key_down(Key::Escape) {
         if window.is_key_pressed(Key::Space, KeyRepeat::No) {
             paused = !paused;
@@ -200,7 +218,7 @@ fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         for (pixel, &on) in buffer.iter_mut().zip(chip8.display()) {
-            *pixel = if on { ON } else { OFF };
+            *pixel = if on { options.fg } else { options.bg };
         }
         window.update_with_buffer(&buffer, DISPLAY_WIDTH, DISPLAY_HEIGHT)?;
     }

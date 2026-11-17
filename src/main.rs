@@ -176,8 +176,14 @@ fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or(path);
-    let title = format!("hesht - {name}");
-    let mut window = Window::new(&title, DISPLAY_WIDTH, DISPLAY_HEIGHT, window_options)?;
+    let mut speed = options.speed;
+    let mut paused = false;
+    let mut window = Window::new(
+        &title(name, speed, paused),
+        DISPLAY_WIDTH,
+        DISPLAY_HEIGHT,
+        window_options,
+    )?;
     window.set_target_fps(60);
 
     let mut audio = rodio::DeviceSinkBuilder::open_default_sink()?;
@@ -186,16 +192,23 @@ fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
     beep.append(SquareWave::new(BEEP_HZ).amplify(BEEP_VOLUME));
     beep.pause();
 
-    let mut paused = false;
     let mut buffer = [options.bg; DISPLAY_WIDTH * DISPLAY_HEIGHT];
     while window.is_open() && !window.is_key_down(Key::Escape) {
+        let mut retitle = false;
         if window.is_key_pressed(Key::Space, KeyRepeat::No) {
             paused = !paused;
-            if paused {
-                window.set_title(&format!("{title} (paused)"));
-            } else {
-                window.set_title(&title);
-            }
+            retitle = true;
+        }
+        if window.is_key_pressed(Key::Equal, KeyRepeat::Yes) {
+            speed = speed.saturating_add(1);
+            retitle = true;
+        }
+        if window.is_key_pressed(Key::Minus, KeyRepeat::Yes) && speed > 1 {
+            speed -= 1;
+            retitle = true;
+        }
+        if retitle {
+            window.set_title(&title(name, speed, paused));
         }
         if window.is_key_pressed(Key::Backspace, KeyRepeat::No) {
             chip8 = boot(&rom, options.quirks)?;
@@ -207,7 +220,7 @@ fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
                 chip8.set_key(key as u8, window.is_key_down(code));
             }
 
-            for _ in 0..options.speed {
+            for _ in 0..speed {
                 chip8.step()?;
             }
             chip8.tick();
@@ -225,6 +238,11 @@ fn run(options: &Options) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn title(name: &str, speed: usize, paused: bool) -> String {
+    let state = if paused { " (paused)" } else { "" };
+    format!("hesht - {name} - speed {speed}{state}")
 }
 
 fn boot(rom: &[u8], quirks: Quirks) -> Result<Chip8, LoadError> {
